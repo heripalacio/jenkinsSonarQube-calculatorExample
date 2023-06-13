@@ -1,35 +1,49 @@
 pipeline {
     agent any
+    
     triggers {
-        pollSCM('* * * * *')
+        // Configurar el trigger para que se dispare al recibir un POST
+        httpRequestTrigger(credentialsId: 'jenkins-credentials', 
+                           serverPort: 8080, 
+                           method: 'POST')
     }
+    
     stages {
-        stage("Compile") {
+        stage('Compile') {
             steps {
-                sh "./gradlew compileJava"
+                // Compilar el proyecto aquí
+                sh 'python compile_script.py'
             }
         }
-        stage("Unit test") {
+        
+        stage('Unit Test') {
             steps {
-                sh "./gradlew test"
-            }
-        }
-        stage("Code coverage") {
-            steps {
-        	    sh "./gradlew jacocoTestReport"
-        	 	publishHTML (target: [
-         	        reportDir: 'build/reports/jacoco/test/html',
-         			reportFiles: 'index.html',
-         			reportName: 'JacocoReport'
-         	    ])
-         		sh "./gradlew jacocoTestCoverageVerification"
-         	}
-        }
-        stage('SonarQube analysis') {
-            steps {
-                withSonarQubeEnv('SonarQubePruebas') {
-                    sh './gradlew sonarqube'
+                // Ejecutar pruebas unitarias
+                sh 'python unit_test_script.py'
+                
+                // Verificar el resultado de las pruebas
+                script {
+                    def unitTestResult = sh(returnStatus: true, script: 'python check_unit_test_result.py')
+                    if (unitTestResult == 0) {
+                        echo 'Las pruebas unitarias pasaron correctamente.'
+                    } else {
+                        error 'Las pruebas unitarias fallaron. Consulta los detalles del error.'
+                    }
                 }
+            }
+        }
+        
+        stage('Code Coverage') {
+            steps {
+                // Cargar el reporte de cobertura (jacoco, por ejemplo)
+                sh 'python load_coverage_report.py'
+            }
+        }
+        
+        stage('SonarQube Analysis') {
+            steps {
+                // Desplegar la aplicación en SonarQube
+                sh 'python deploy_sonarqube.py'
             }
         }
     }
